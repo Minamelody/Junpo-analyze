@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: jyanpo-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python combined_server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11

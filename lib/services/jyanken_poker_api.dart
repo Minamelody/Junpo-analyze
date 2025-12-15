@@ -3,8 +3,13 @@ import 'dart:convert';
 import '../models/poker_session.dart';
 
 class JyankenPokerAPI {
-  // プロキシサーバーのURL（同じドメインなのでCORS問題なし）
-  static const String proxyUrl = '/proxy';
+  // プロキシサーバーのURL
+  // 本番環境: 環境変数 API_BASE_URL を設定
+  // ローカル/同一ドメイン: '/proxy'
+  static const String proxyUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '/proxy',
+  );
   final http.Client _client = http.Client();
   String? _sessionId;
 
