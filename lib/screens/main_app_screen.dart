@@ -180,6 +180,13 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
         'total_profit': 0,
         'avg_profit': 0.0,
         'win_rate': 0.0,
+        'avg_daily_change': 0.0,
+        'max_profit_day': 0,
+        'min_profit_day': 0,
+        'plus_days': 0,
+        'minus_days': 0,
+        'avg_ring': 0.0,
+        'avg_tournament': 0.0,
       };
     }
 
@@ -187,14 +194,25 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
     int totalTournament = 0;
     int totalProfit = 0;
     int winCount = 0;
+    int maxProfit = _sessions.first.totalChange;
+    int minProfit = _sessions.first.totalChange;
+    int plusDays = 0;
+    int minusDays = 0;
 
     for (var session in _sessions) {
       totalRing += session.ringProfit;
       totalTournament += session.tournamentProfit;
       totalProfit += session.totalChange;
+      
       if (session.totalChange > 0) {
         winCount++;
+        plusDays++;
+      } else if (session.totalChange < 0) {
+        minusDays++;
       }
+      
+      if (session.totalChange > maxProfit) maxProfit = session.totalChange;
+      if (session.totalChange < minProfit) minProfit = session.totalChange;
     }
 
     return {
@@ -204,6 +222,13 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
       'total_profit': totalProfit,
       'avg_profit': totalProfit / _sessions.length,
       'win_rate': (winCount / _sessions.length) * 100,
+      'avg_daily_change': totalProfit / _sessions.length,
+      'max_profit_day': maxProfit,
+      'min_profit_day': minProfit,
+      'plus_days': plusDays,
+      'minus_days': minusDays,
+      'avg_ring': totalRing / _sessions.length,
+      'avg_tournament': totalTournament / _sessions.length,
     };
   }
 
