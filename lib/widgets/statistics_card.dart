@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 class StatisticsCard extends StatelessWidget {
   final Map<String, dynamic> statistics;
@@ -199,12 +199,7 @@ class StatisticsCard extends StatelessWidget {
   }
   
   void _shareToSNS(String text) {
-    // この部分はshare_plusパッケージを使って実装
-    // 今はダミー実装（実際にはshare_plus.dartをインポートして使用）
-    if (kDebugMode) {
-      debugPrint('シェア: $text');
-    }
-    // Share.share(text);
+    Share.share(text);
   }
 
   Widget _buildStatRow(String label, String value, Color valueColor, {bool isLarge = false}) {
