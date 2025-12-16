@@ -39,6 +39,9 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
   // 店舗関連
   List<Map<String, String>> _stores = [];
   String _selectedStoreId = '6'; // デフォルトは京都河原町店
+  
+  // グラフキャプチャ用
+  final GlobalKey _chartKey = GlobalKey();
 
   @override
   void initState() {
@@ -430,7 +433,10 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StatisticsCard(statistics: statistics),
+          StatisticsCard(
+            statistics: statistics,
+            chartKey: _chartKey,
+          ),
           const SizedBox(height: 24),
           const Text(
             '収支推移',
@@ -441,9 +447,15 @@ class _MainAppScreenState extends State<MainAppScreen> with WidgetsBindingObserv
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 300,
-            child: ProfitChart(sessions: _sessions),
+          RepaintBoundary(
+            key: _chartKey,
+            child: Container(
+              color: Colors.white,
+              child: SizedBox(
+                height: 300,
+                child: ProfitChart(sessions: _sessions),
+              ),
+            ),
           ),
         ],
       ),

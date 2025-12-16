@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 class StatisticsCard extends StatelessWidget {
   final Map<String, dynamic> statistics;
+  final GlobalKey? chartKey;
+  final VoidCallback? onCaptureChart;
 
-  const StatisticsCard({super.key, required this.statistics});
+  const StatisticsCard({
+    super.key, 
+    required this.statistics,
+    this.chartKey,
+    this.onCaptureChart,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -142,51 +152,90 @@ class StatisticsCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('SNSでシェア'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: Text(
-                shareText,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _shareToSNS(shareText);
-                },
-                icon: const Icon(Icons.share, size: 18),
-                label: const Text('通常版をシェア'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  shareText,
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _shareToSNS(anonymousText);
-                },
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('匿名版をシェア（金額非表示）'),
+              const SizedBox(height: 16),
+              // グラフ付きシェア
+              if (chartKey != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _shareWithChart(context, shareText, false);
+                    },
+                    icon: const Icon(Icons.image, size: 18),
+                    label: const Text('グラフ付きでシェア'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              // テキストのみシェア
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _shareToSNS(shareText);
+                  },
+                  icon: const Icon(Icons.share, size: 18),
+                  label: const Text('テキストのみシェア'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _shareToSNS(anonymousText);
+                  },
+                  icon: const Icon(Icons.lock_outline, size: 18),
+                  label: const Text('匿名版をシェア'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              // グラフ画像ダウンロード
+              if (chartKey != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _downloadChartImage(context);
+                    },
+                    icon: const Icon(Icons.download, size: 18),
+                    label: const Text('グラフ画像をダウンロード'),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -196,6 +245,82 @@ class StatisticsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+  
+  Future<void> _shareWithChart(BuildContext context, String text, bool anonymous) async {
+    if (chartKey == null || chartKey!.currentContext == null) {
+      _shareToSNS(text);
+      return;
+    }
+
+    try {
+      // グラフをキャプチャ
+      RenderRepaintBoundary boundary = chartKey!.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (byteData != null) {
+        Uint8List pngBytes = byteData.buffer.asUint8List();
+        
+        // 画像ファイルとしてシェア
+        await Share.shareXFiles(
+          [XFile.fromData(pngBytes, name: 'jyanpo_chart.png', mimeType: 'image/png')],
+          text: text,
+        );
+      }
+    } catch (e) {
+      // エラーの場合はテキストのみシェア
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('グラフのキャプチャに失敗しました。テキストのみシェアします。')),
+        );
+      }
+      _shareToSNS(text);
+    }
+  }
+  
+  Future<void> _downloadChartImage(BuildContext context) async {
+    if (chartKey == null || chartKey!.currentContext == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('グラフが見つかりません')),
+        );
+      }
+      return;
+    }
+
+    try {
+      // グラフをキャプチャ
+      RenderRepaintBoundary boundary = chartKey!.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (byteData != null) {
+        Uint8List pngBytes = byteData.buffer.asUint8List();
+        
+        // Web環境では自動ダウンロード
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        await Share.shareXFiles(
+          [XFile.fromData(pngBytes, name: 'jyanpo_chart_$timestamp.png', mimeType: 'image/png')],
+          subject: 'じゃんぽ分析グラフ',
+        );
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('グラフ画像を保存しました！'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エラー: $e')),
+        );
+      }
+    }
   }
   
   void _shareToSNS(String text) {
