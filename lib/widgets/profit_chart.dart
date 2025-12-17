@@ -12,7 +12,7 @@ class ProfitChart extends StatefulWidget {
 }
 
 class _ProfitChartState extends State<ProfitChart> {
-  String _selectedChart = 'cumulative'; // 'cumulative', 'ring', 'tournament'
+  String _selectedChart = 'cumulative'; // 'cumulative', 'ring', 'tournament', 'monthly'
 
   @override
   Widget build(BuildContext context) {
@@ -52,15 +52,20 @@ class _ProfitChartState extends State<ProfitChart> {
   }
 
   Widget _buildChartSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildChipButton('累積', 'cumulative'),
-        const SizedBox(width: 8),
-        _buildChipButton('リング', 'ring'),
-        const SizedBox(width: 8),
-        _buildChipButton('トーナメント', 'tournament'),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildChipButton('累積', 'cumulative'),
+          const SizedBox(width: 8),
+          _buildChipButton('リング', 'ring'),
+          const SizedBox(width: 8),
+          _buildChipButton('トーナメント', 'tournament'),
+          const SizedBox(width: 8),
+          _buildChipButton('月別比較', 'monthly'),
+        ],
+      ),
     );
   }
 
@@ -86,6 +91,10 @@ class _ProfitChartState extends State<ProfitChart> {
   }
 
   Widget _buildChart() {
+    if (_selectedChart == 'monthly') {
+      return _buildMonthlyComparisonChart();
+    }
+    
     final reversedSessions = widget.sessions.reversed.toList();
     
     List<FlSpot> spots;
@@ -239,5 +248,194 @@ class _ProfitChartState extends State<ProfitChart> {
       return '${(value / 1000).toStringAsFixed(0)}k';
     }
     return value.toStringAsFixed(0);
+  }
+  
+  Widget _buildMonthlyComparisonChart() {
+    // 月ごとにデータを集計
+    Map<String, Map<String, dynamic>> monthlyData = {};
+    
+    for (var session in widget.sessions) {
+      final pokerSession = session as PokerSession;
+      final monthKey = '${pokerSession.date.year}-${pokerSession.date.month.toString().padLeft(2, '0')}';
+      
+      if (!monthlyData.containsKey(monthKey)) {
+        monthlyData[monthKey] = {
+          'total': 0,
+          'ring': 0,
+          'tournament': 0,
+          'sessions': 0,
+          'year': pokerSession.date.year,
+          'month': pokerSession.date.month,
+        };
+      }
+      
+      monthlyData[monthKey]!['total'] += pokerSession.totalChange;
+      monthlyData[monthKey]!['ring'] += pokerSession.ringProfit;
+      monthlyData[monthKey]!['tournament'] += pokerSession.tournamentProfit;
+      monthlyData[monthKey]!['sessions'] += 1;
+    }
+    
+    // ソート（古い順）
+    final sortedKeys = monthlyData.keys.toList()..sort();
+    
+    if (sortedKeys.isEmpty) {
+      return const Center(child: Text('データがありません'));
+    }
+    
+    // 棒グラフ用のデータを作成
+    final barGroups = <BarChartGroupData>[];
+    
+    for (int i = 0; i < sortedKeys.length; i++) {
+      final key = sortedKeys[i];
+      final data = monthlyData[key]!;
+      final total = data['total'] as int;
+      
+      barGroups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: total.toDouble(),
+              color: total >= 0 ? Colors.green : Colors.red,
+              width: sortedKeys.length > 6 ? 12 : 20,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: _calculateMaxY(monthlyData),
+        minY: _calculateMinY(monthlyData),
+        barGroups: barGroups,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: _calculateMonthlyInterval(monthlyData),
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.grey.shade200,
+              strokeWidth: 1,
+            );
+          },
+        ),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 60,
+              getTitlesWidget: (value, meta) {
+                return Text(
+                  _formatNumber(value),
+                  style: const TextStyle(fontSize: 10, color: Colors.black54),
+                );
+              },
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() >= sortedKeys.length) {
+                  return const SizedBox.shrink();
+                }
+                final key = sortedKeys[value.toInt()];
+                final data = monthlyData[key]!;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '${data['year']}\n${data['month']}月',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 9, color: Colors.black54),
+                  ),
+                );
+              },
+            ),
+          ),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade300),
+            left: BorderSide(color: Colors.grey.shade300),
+          ),
+        ),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              final key = sortedKeys[group.x.toInt()];
+              final data = monthlyData[key]!;
+              final total = data['total'] as int;
+              final ring = data['ring'] as int;
+              final tournament = data['tournament'] as int;
+              final sessions = data['sessions'] as int;
+              
+              return BarTooltipItem(
+                '${data['year']}年${data['month']}月\n',
+                const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(
+                    text: '総収支: ${total >= 0 ? '+' : ''}${total}pt\n',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
+                  ),
+                  TextSpan(
+                    text: 'リング: ${ring >= 0 ? '+' : ''}${ring}pt\n',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                  TextSpan(
+                    text: 'トーナメント: ${tournament >= 0 ? '+' : ''}${tournament}pt\n',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                  TextSpan(
+                    text: 'セッション数: $sessions回',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+  
+  double _calculateMaxY(Map<String, Map<String, dynamic>> monthlyData) {
+    if (monthlyData.isEmpty) return 1000;
+    final maxValue = monthlyData.values
+        .map((data) => data['total'] as int)
+        .reduce((a, b) => a > b ? a : b)
+        .toDouble();
+    return maxValue > 0 ? maxValue * 1.2 : 1000;
+  }
+  
+  double _calculateMinY(Map<String, Map<String, dynamic>> monthlyData) {
+    if (monthlyData.isEmpty) return -1000;
+    final minValue = monthlyData.values
+        .map((data) => data['total'] as int)
+        .reduce((a, b) => a < b ? a : b)
+        .toDouble();
+    return minValue < 0 ? minValue * 1.2 : 0;
+  }
+  
+  double _calculateMonthlyInterval(Map<String, Map<String, dynamic>> monthlyData) {
+    if (monthlyData.isEmpty) return 1000;
+    
+    final values = monthlyData.values.map((data) => data['total'] as int).toList();
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final max = values.reduce((a, b) => a > b ? a : b);
+    final range = (max - min).abs();
+    
+    if (range < 1000) return 200;
+    if (range < 5000) return 1000;
+    if (range < 10000) return 2000;
+    return 5000;
   }
 }
