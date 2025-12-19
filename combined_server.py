@@ -34,22 +34,38 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True  # XSS対策
 app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'  # CSRF対策
 
 # 🔒 CORS設定（特定のオリジンのみ許可）
-ALLOWED_ORIGINS = [
-    'https://5060-imv460mslw8g37var1eds-3844e1b6.sandbox.novita.ai',
-    'https://junpo-analyze.vercel.app',
-    'https://junpo-analyze-*.vercel.app',
-    'http://localhost:5060',  # 開発環境
-]
+# 開発中は緩和、本番環境では厳格化推奨
+DEV_MODE = os.environ.get('DEV_MODE', 'true').lower() == 'true'
 
-CORS(app, 
-     resources={r"/*": {
-         "origins": ALLOWED_ORIGINS,
-         "methods": ["GET", "POST", "OPTIONS"],
-         "allow_headers": ["Content-Type", "X-Session-ID"],
-         "expose_headers": ["Content-Type"],
-         "supports_credentials": True,
-         "max_age": 3600
-     }})
+if DEV_MODE:
+    # 開発モード: すべてのVercelドメインとサンドボックスを許可
+    CORS(app, 
+         resources={r"/*": {
+             "origins": "*",  # 開発中は全許可
+             "methods": ["GET", "POST", "OPTIONS"],
+             "allow_headers": ["Content-Type", "X-Session-ID"],
+             "expose_headers": ["Content-Type"],
+             "supports_credentials": False,  # *を使う場合はFalse必須
+             "max_age": 3600
+         }})
+    logger.info("🔓 CORS: Development mode - all origins allowed")
+else:
+    # 本番モード: 特定のオリジンのみ
+    ALLOWED_ORIGINS = [
+        'https://5060-imv460mslw8g37var1eds-3844e1b6.sandbox.novita.ai',
+        'https://junpo-analyze.vercel.app',
+        'http://localhost:5060',
+    ]
+    CORS(app, 
+         resources={r"/*": {
+             "origins": ALLOWED_ORIGINS,
+             "methods": ["GET", "POST", "OPTIONS"],
+             "allow_headers": ["Content-Type", "X-Session-ID"],
+             "expose_headers": ["Content-Type"],
+             "supports_credentials": True,
+             "max_age": 3600
+         }})
+    logger.info(f"🔒 CORS: Production mode - allowed origins: {ALLOWED_ORIGINS}")
 
 # 🔒 レート制限設定
 limiter = Limiter(
